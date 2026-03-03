@@ -19,22 +19,22 @@ export async function fetchLimits() {
   return res.json();
 }
 
-export async function login(username, password) {
+export async function login(email, password) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: getHeaders(false),
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ email, password }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Login failed');
   return data;
 }
 
-export async function register(username, password, email) {
+export async function register(fullName, password, email) {
   const res = await fetch(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: getHeaders(false),
-    body: JSON.stringify({ username, password, email }),
+    body: JSON.stringify({ full_name: fullName, password, email }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Error al registrarse');

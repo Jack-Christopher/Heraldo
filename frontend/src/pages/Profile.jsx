@@ -50,7 +50,7 @@ export default function Profile() {
       <h1>Perfil</h1>
       {profile && (
         <div className="profile-info">
-          <p><strong>Usuario:</strong> {profile.username}</p>
+          <p><strong>Nombres:</strong> {profile.full_name}</p>
           {profile.email && <p><strong>Email:</strong> {profile.email}</p>}
           {profile.last_ip && <p><strong>Última IP:</strong> {profile.last_ip}</p>}
           {profile.last_login && (

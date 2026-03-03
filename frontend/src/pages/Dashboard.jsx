@@ -27,7 +27,7 @@ export default function Dashboard() {
   return (
     <div className="dashboard">
       <h1>Dashboard</h1>
-      <p>Hola, {user?.username}</p>
+      <p>Hola, {user?.full_name}</p>
 
       <section className="limits-info">
         <h2>Límites</h2>

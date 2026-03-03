@@ -7,8 +7,7 @@ from pymongo import ASCENDING
 
 
 def migrate(db):
-    # Users: unique username, unique email, verification_token for lookup
-    db.users.create_index("username", unique=True)
+    # Users: unique email
     db.users.create_index("email", unique=True)
     db.users.create_index("verification_token", sparse=True)
 

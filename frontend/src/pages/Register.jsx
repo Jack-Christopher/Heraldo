@@ -3,12 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Register() {
-  const [username, setUsername] = useState('');
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
   const { user, register } = useAuth();
   const navigate = useNavigate();
 
@@ -29,28 +28,12 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      await register(username, password, email);
-      setSuccess(true);
+      await register(fullName, password, email);
     } catch (err) {
       setError(err.message || 'Error al registrarse');
     } finally {
       setLoading(false);
     }
-  }
-
-  if (success) {
-    return (
-      <div className="auth-page">
-        <h1>Heraldo</h1>
-        <p className="subtitle">Revisa tu email</p>
-        <div className="success">
-          Te enviamos un correo a <strong>{email}</strong>. Haz clic en el enlace para confirmar tu cuenta.
-        </div>
-        <p>
-          <Link to="/login">Iniciar sesión</Link>
-        </p>
-      </div>
-    );
   }
 
   return (
@@ -61,9 +44,9 @@ export default function Register() {
         {error && <div className="error">{error}</div>}
         <input
           type="text"
-          placeholder="Usuario (mín. 2 caracteres)"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Nombres completos (mín. 2 caracteres)"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
           required
           minLength={2}
           autoFocus

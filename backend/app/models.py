@@ -23,21 +23,27 @@ def get_documents_collection() -> Collection:
     return get_db()["documents"]
 
 
-def user_create(username: str, password_hash: str, ip: str, email: str, verification_token: Optional[str] = None) -> dict:
-    """Create a new user. email_verified=False until user clicks verification link."""
+def user_create(full_name: str, password_hash: str, ip: str, email: str) -> dict:
+    """Create a new user."""
     doc = {
-        "username": username,
+        "full_name": full_name,
         "password_hash": password_hash,
         "email": email,
-        "email_verified": False,
-        "verification_token": verification_token,
         "created_at": datetime.utcnow(),
         "last_login": datetime.utcnow(),
         "last_ip": ip,
+        "created_from_ip": ip,
     }
     result = get_users_collection().insert_one(doc)
     doc["_id"] = result.inserted_id
     return doc
+
+
+def user_find_by_ip(ip: str) -> Optional[dict]:
+    """Find user from this IP (one account per IP)."""
+    return get_users_collection().find_one(
+        {"$or": [{"created_from_ip": ip}, {"last_ip": ip}]}
+    )
 
 
 def user_find_by_verification_token(token: str) -> Optional[dict]:
@@ -58,9 +64,6 @@ def user_find_by_email(email: str) -> Optional[dict]:
     return get_users_collection().find_one({"email": email})
 
 
-def user_find_by_username(username: str) -> Optional[dict]:
-    """Find user by username."""
-    return get_users_collection().find_one({"username": username})
 
 
 def user_update_login(user_id, ip: str):

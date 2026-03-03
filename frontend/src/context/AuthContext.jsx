@@ -21,15 +21,15 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (username, password) => {
-    const data = await apiLogin(username, password);
+  const login = async (email, password) => {
+    const data = await apiLogin(email, password);
     localStorage.setItem('heraldo_token', data.token);
     setUser(data.user);
     return data;
   };
 
-  const register = async (username, password, email) => {
-    const data = await apiRegister(username, password, email);
+  const register = async (fullName, password, email) => {
+    const data = await apiRegister(fullName, password, email);
     if (data.token) {
       localStorage.setItem('heraldo_token', data.token);
       setUser(data.user);

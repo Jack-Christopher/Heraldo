@@ -1,17 +1,26 @@
 # Verificación de email y costos
 
-## Configuración
+## Configuración (Brevo SMTP)
 
-Para enviar correos de verificación, configura en `.env`:
+Configura en `.env` (docker-compose pasa estas variables al contenedor API):
 
 ```
-MAIL_SERVER=smtp.example.com
+MAIL_SERVER=smtp-relay.brevo.com
 MAIL_PORT=587
-MAIL_USERNAME=tu_usuario
-MAIL_PASSWORD=tu_contraseña
+MAIL_USERNAME=xxx@smtp-brevo.com
+MAIL_PASSWORD=tu-clave-smtp
 MAIL_FROM=noreply@tudominio.com
-FRONTEND_URL=https://tudominio.com
+FRONTEND_URL=http://tu-ip-o-dominio:3001
 ```
+
+**Importante**: `FRONTEND_URL` debe ser la URL pública donde los usuarios acceden al frontend.
+
+### Brevo SMTP
+
+1. Brevo → **Transactional** → **SMTP y API**
+2. **MAIL_USERNAME** = "Iniciar sesión" (ej: `a3dbd9001@smtp-brevo.com`)
+3. **MAIL_PASSWORD** = Valor de la clave SMTP (crea una en "Tus claves SMTP")
+4. **MAIL_FROM** = Email verificado como remitente (Senders) - el que verán los destinatarios
 
 ## Costos
 

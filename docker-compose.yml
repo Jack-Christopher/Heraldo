@@ -27,6 +27,7 @@ services:
       - OUTPUTS_DIR=/app/outputs
       - UPLOADS_DIR=/app/uploads
       - TTS_ENGINE=${TTS_ENGINE:-gtts}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3001}
     volumes:
       - heraldo_outputs:/app/outputs
       - heraldo_uploads:/app/uploads
