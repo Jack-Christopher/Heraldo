@@ -13,15 +13,15 @@ MONGO_ROOT_USER=heraldo_admin
 MONGO_ROOT_PASSWORD=contraseña-segura
 ```
 
-## Volumen existente (reinstalación)
+## Volumen existente (reinstalación) — OBLIGATORIO si MongoDB falla
 
-Si tienes un volumen de MongoDB anterior (por ejemplo, después de un incidente o migración), **debes eliminarlo** para que se ejecute el init que crea el usuario con contraseña:
+Si MongoDB arrancó antes **sin autenticación**, el volumen ya tiene datos y el init se salta. No se crea el usuario. El healthcheck fallará. **Debes borrar el volumen**:
 
 ```bash
 docker compose down
-docker volume rm heraldo_mongodb_data   # o el nombre que muestre: docker volume ls
-# Añadir MONGO_ROOT_PASSWORD a .env
+docker volume ls | grep mongo          # ver nombre exacto (p. ej. heraldo_mongodb_data)
+docker volume rm heraldo_mongodb_data  # usa el nombre que salga
 docker compose up -d
 ```
 
-**Advertencia**: Esto borra todos los datos de MongoDB. Haz backup si necesitas conservar algo.
+**Advertencia**: Borra todos los datos de MongoDB.

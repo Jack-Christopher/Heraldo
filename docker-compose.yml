@@ -5,13 +5,15 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USER:-heraldo_admin}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD required}
+      - MONGO_URI=mongodb://${MONGO_ROOT_USER:-heraldo_admin}:${MONGO_ROOT_PASSWORD}@localhost:27017/admin
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: ["CMD", "sh", "-c", "mongosh 'mongodb://$${MONGO_INITDB_ROOT_USERNAME}:$${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/admin' --quiet --eval 'db.adminCommand(\"ping\").ok'"]
+      test: ["CMD", "sh", "-c", "mongosh \"$$MONGO_URI\" --quiet --eval 'db.adminCommand(\"ping\").ok'"]
       interval: 5s
-      timeout: 5s
+      timeout: 10s
       retries: 5
+      start_period: 15s
     restart: unless-stopped
 
   api:
