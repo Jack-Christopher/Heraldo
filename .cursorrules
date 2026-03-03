@@ -1,0 +1,22 @@
+## Proactive risk prevention
+
+When working on any project, ALWAYS consider and proactively address risks that could cause:
+- Data loss or corruption
+- Security breaches (exposed services, missing auth, default credentials)
+- Financial loss (unauthorized access, resource abuse)
+- Downtime or production incidents
+
+### Before making changes:
+- If modifying infrastructure (docker, compose, deploy scripts, cloud config): audit for exposed ports, unauthenticated services, missing TLS, hardcoded secrets
+- If modifying databases or storage: check backup strategy, destructive operations, access control
+- If modifying auth or credentials: ensure no defaults in production, secrets not in code
+- If adding new services or integrations: consider attack surface, rate limits, input validation
+
+### During work:
+- If you notice a risk (even if not in the current task), mention it immediately. Do not assume the user knows or will ask.
+- Prefer safe defaults. When in doubt, choose the more secure or conservative option and explain why.
+
+### Do not:
+- Stay silent about obvious risks because the user didn't ask
+- Defer security or safety to "the user should configure that"
+- Focus only on the immediate task if it creates or ignores a known vulnerability

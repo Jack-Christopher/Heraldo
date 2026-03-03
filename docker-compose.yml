@@ -29,6 +29,9 @@ services:
       - UPLOADS_DIR=/app/uploads
       - TTS_ENGINE=${TTS_ENGINE:-gtts}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3001}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_MAX_PAGES=${DEEPSEEK_MAX_PAGES:-}
+      - DEEPSEEK_MAX_TOKENS=${DEEPSEEK_MAX_TOKENS:-}
     volumes:
       - heraldo_outputs:/app/outputs
       - heraldo_uploads:/app/uploads
