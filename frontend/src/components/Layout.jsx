@@ -1,4 +1,4 @@
-import { Outlet, Link, Navigate } from 'react-router-dom';
+import { Outlet, Link, NavLink, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Layout() {
@@ -12,10 +12,10 @@ export default function Layout() {
       <header>
         <Link to="/" className="logo">Heraldo</Link>
         <nav>
-          <Link to="/">Dashboard</Link>
-          <Link to="/upload">Subir PDF</Link>
-          <Link to="/my-pdfs">Mis PDFs</Link>
-          <Link to="/profile">Perfil</Link>
+          <NavLink to="/" end>Dashboard</NavLink>
+          <NavLink to="/upload">Subir PDF</NavLink>
+          <NavLink to="/my-pdfs">Mis PDFs</NavLink>
+          <NavLink to="/profile">Perfil</NavLink>
         </nav>
       </header>
       <main>

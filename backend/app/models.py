@@ -3,7 +3,7 @@ MongoDB models and database access for Heraldo API.
 """
 from datetime import datetime
 from typing import Optional
-from pymongo import MongoClient, ASCENDING
+from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.collection import Collection
 
@@ -23,18 +23,14 @@ def get_documents_collection() -> Collection:
     return get_db()["documents"]
 
 
-def ensure_indexes(db: Database):
-    """Create required indexes."""
-    db.users.create_index("username", unique=True)
-    db.documents.create_index([("user_id", ASCENDING), ("created_at", ASCENDING)])
-
-
-def user_create(username: str, password_hash: str, ip: str, email: Optional[str] = None) -> dict:
-    """Create a new user."""
+def user_create(username: str, password_hash: str, ip: str, email: str, verification_token: Optional[str] = None) -> dict:
+    """Create a new user. email_verified=False until user clicks verification link."""
     doc = {
         "username": username,
         "password_hash": password_hash,
         "email": email,
+        "email_verified": False,
+        "verification_token": verification_token,
         "created_at": datetime.utcnow(),
         "last_login": datetime.utcnow(),
         "last_ip": ip,
@@ -42,6 +38,24 @@ def user_create(username: str, password_hash: str, ip: str, email: Optional[str]
     result = get_users_collection().insert_one(doc)
     doc["_id"] = result.inserted_id
     return doc
+
+
+def user_find_by_verification_token(token: str) -> Optional[dict]:
+    """Find user by verification token."""
+    return get_users_collection().find_one({"verification_token": token})
+
+
+def user_verify_email(user_id) -> None:
+    """Mark user email as verified and clear token."""
+    get_users_collection().update_one(
+        {"_id": user_id},
+        {"$set": {"email_verified": True}, "$unset": {"verification_token": ""}}
+    )
+
+
+def user_find_by_email(email: str) -> Optional[dict]:
+    """Find user by email."""
+    return get_users_collection().find_one({"email": email})
 
 
 def user_find_by_username(username: str) -> Optional[dict]:
@@ -85,7 +99,25 @@ def document_update_status(doc_id, status: str, output_path: Optional[str] = Non
         update["error_message"] = error_message
     if status in ("completed", "failed"):
         update["completed_at"] = datetime.utcnow()
+        update["progress"] = None  # clear progress when done
     get_documents_collection().update_one({"_id": doc_id}, {"$set": update})
+
+
+def document_update_progress(doc_id, phase: str, current: int, total: int, phase_label: str = "", overall_pct: float = None):
+    """Update processing progress. overall_pct = 0-100 for total pipeline progress."""
+    step_pct = round(100 * current / total, 1) if total > 0 else 0
+    if overall_pct is None:
+        overall_pct = step_pct
+    get_documents_collection().update_one(
+        {"_id": doc_id},
+        {"$set": {"progress": {
+            "phase": phase,
+            "current": current,
+            "total": total,
+            "pct": overall_pct,
+            "label": phase_label,
+        }}}
+    )
 
 
 def document_find_by_id(doc_id):
@@ -111,3 +143,8 @@ def document_count_active_by_user(user_id) -> int:
     return get_documents_collection().count_documents(
         {"user_id": user_id, "status": {"$in": ["pending", "processing"]}}
     )
+
+
+def document_count_total_by_user(user_id) -> int:
+    """Count all documents for a user (for total limit)."""
+    return get_documents_collection().count_documents({"user_id": user_id})

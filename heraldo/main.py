@@ -54,6 +54,7 @@ class HeraldoPipeline:
         xtts_speaker_wav: Optional[str] = None,
         xtts_no_cuda: bool = False,
         ai_style: str = "divulgacion",
+        progress_callback=None,
     ):
         """
         Inicializa el pipeline de Heraldo.
@@ -95,6 +96,7 @@ class HeraldoPipeline:
         self.xtts_speaker_wav = xtts_speaker_wav
         self.xtts_no_cuda = xtts_no_cuda
         self.ai_style = ai_style
+        self.progress_callback = progress_callback
 
         # Inicializar componentes
         self.extractor = PDFExtractor(pdf_path, block_size)
@@ -229,7 +231,11 @@ class HeraldoPipeline:
                 print("\n[Fase 1] Extrayendo y limpiando texto del PDF...")
             else:
                 print("\n[Fase 1] Extrayendo texto del PDF (sin limpieza)...")
+            if self.progress_callback:
+                self.progress_callback("extraction", 0, 1, "Extrayendo texto del PDF", 2)
             blocks = self.extractor.process(clean=self.clean_pdf)
+            if self.progress_callback:
+                self.progress_callback("extraction", 1, 1, "Extrayendo texto del PDF", 5)
             processed_blocks = []
             start_block = 0
             total_blocks = len(blocks)
@@ -287,7 +293,6 @@ class HeraldoPipeline:
 
             # Procesar bloques con barra de progreso
             failed_blocks = []
-            
             for i in tqdm(range(start_block, total_blocks), desc="Procesando bloques"):
                 block = blocks[i]
                 
@@ -307,7 +312,11 @@ class HeraldoPipeline:
                     processed_blocks=processed_blocks,
                     total_blocks=total_blocks
                 )
-            
+                if self.progress_callback:
+                    done = i - start_block + 1
+                    tot = total_blocks - start_block
+                    pct = 5 + int(5 * done / tot) if tot > 0 else 10
+                    self.progress_callback("ai", done, tot, f"Procesando con IA (bloque {done} de {tot})", pct)
             if failed_blocks:
                 print(f"\nAdvertencia: {len(failed_blocks)} bloques fallaron y se usó el texto original")
         else:
@@ -316,6 +325,8 @@ class HeraldoPipeline:
             processed_blocks = blocks
         
         # Fase 3: Consolidación
+        if self.progress_callback:
+            self.progress_callback("consolidation", 0, 1, "Consolidando texto", 5)
         print("\n[Fase 3] Consolidando y organizando texto...")
         
         # En modo simple, si no se usa IA, forzar división en capítulos pequeños
@@ -335,6 +346,8 @@ class HeraldoPipeline:
         consolidated_text_path = os.path.join(self.output_dir, "texto_procesado.txt")
         with open(consolidated_text_path, 'w', encoding='utf-8') as f:
             f.write('\n\n'.join(chapters))
+        if self.progress_callback:
+            self.progress_callback("consolidation", 1, 1, "Consolidando texto", 10)
         print(f"Texto consolidado guardado en: {consolidated_text_path}")
         
         # Fase 4: Conversión a audio
@@ -343,6 +356,7 @@ class HeraldoPipeline:
         print(f"\n[Fase 4] Generando {len(chapters)} archivos de audio...")
         
         audio_files = []
+        total_ch = len(chapters)
         for i, chapter in enumerate(tqdm(chapters, desc="Generando audio")):
             output_filename = f"bloque_{i+1:03d}.wav"
             output_path = os.path.join(self.output_dir, output_filename)
@@ -353,7 +367,11 @@ class HeraldoPipeline:
                 
                 if success and os.path.exists(output_path):
                     audio_files.append(output_path)
-                else:
+                if self.progress_callback:
+                    cur, tot = i + 1, total_ch
+                    pct = 10 + int(80 * cur / tot) if tot > 0 else 90
+                    self.progress_callback("tts", cur, tot, f"Generando audio (bloque {cur} de {tot})", pct)
+                if not success:
                     print(f"\nAdvertencia: No se pudo generar audio para el bloque {i+1}")
                     print(f"  Ruta intentada: {output_path}")
                     print(f"  Longitud del texto: {len(chapter)} caracteres (~{len(chapter.split())} palabras)")
@@ -363,20 +381,24 @@ class HeraldoPipeline:
                 import traceback
                 traceback.print_exc()
         
-        # Mergear audios si está habilitado y hay múltiples archivos
+        # Mergear audios
+        if self.progress_callback:
+            self.progress_callback("merge", 0, 1, "Mergeando audio", 90)
         if self.merge_audio and len(audio_files) > 1:
-            print(f"\nMergeando {len(audio_files)} archivos de audio...")
-            merged_path = os.path.join(self.output_dir, f"{self.pdf_name}.wav")
+            print(f"\nMergeando {len(audio_files)} archivos de audio a MP3...")
+            merged_path = os.path.join(self.output_dir, f"{self.pdf_name}.mp3")
             if self._merge_audio_files(audio_files, merged_path):
+                if self.progress_callback:
+                    self.progress_callback("merge", 1, 1, "Mergeando audio", 100)
                 print(f"✓ Audio completo guardado en: {merged_path}")
             else:
                 print("⚠ No se pudo mergear los archivos de audio")
         elif self.merge_audio and len(audio_files) == 1:
-            # Si solo hay un archivo, renombrarlo al nombre del PDF
+            # Si solo hay un archivo, convertir WAV a MP3
             if audio_files:
-                import shutil
-                merged_path = os.path.join(self.output_dir, f"{self.pdf_name}.wav")
-                shutil.copy2(audio_files[0], merged_path)
+                merged_path = os.path.join(self.output_dir, f"{self.pdf_name}.mp3")
+                if _merge_audio_to_mp3(audio_files, merged_path) and self.progress_callback:
+                    self.progress_callback("merge", 1, 1, "Mergeando audio", 100)
                 print(f"✓ Audio guardado en: {merged_path}")
         
         # Limpiar checkpoint al completar (solo si se usó IA)
@@ -390,23 +412,26 @@ class HeraldoPipeline:
         if self.use_ai:
             print(f"  - Texto procesado: {consolidated_text_path}")
         if self.merge_audio and audio_files:
-            print(f"  - Audio completo: {os.path.join(self.output_dir, f'{self.pdf_name}.wav')}")
+            print(f"  - Audio completo: {os.path.join(self.output_dir, f'{self.pdf_name}.mp3')}")
         print("=" * 60)
     
     def _merge_audio_files(self, audio_files: List[str], output_path: str) -> bool:
         """
-        Combina múltiples archivos de audio WAV en uno solo.
+        Combina múltiples archivos de audio en uno solo (MP3).
         Usa pydub para normalizar parámetros distintos (sample rate, canales).
         """
-        return _merge_wav_files(audio_files, output_path)
+        return _merge_audio_to_mp3(audio_files, output_path)
 
 
-def _merge_wav_files(audio_files: List[str], output_path: str) -> bool:
+def _merge_audio_to_mp3(audio_files: List[str], output_path: str) -> bool:
     """
-    Combina múltiples WAV en uno. Usa pydub para normalizar parámetros distintos.
+    Combina múltiples WAV en un MP3. Usa pydub para normalizar parámetros distintos.
+    Si output_path termina en .wav, exporta WAV; si termina en .mp3, exporta MP3.
     """
     if not audio_files:
         return False
+    out_ext = os.path.splitext(output_path)[1].lower()
+    fmt = "mp3" if out_ext == ".mp3" else "wav"
     try:
         from pydub import AudioSegment
         target = AudioSegment.from_wav(audio_files[0])
@@ -421,7 +446,7 @@ def _merge_wav_files(audio_files: List[str], output_path: str) -> bool:
             if seg.sample_width != target.sample_width:
                 seg = seg.set_sample_width(target.sample_width)
             target += seg
-        target.export(output_path, format="wav")
+        target.export(output_path, format=fmt)
         return os.path.exists(output_path) and os.path.getsize(output_path) > 0
     except ImportError:
         import wave

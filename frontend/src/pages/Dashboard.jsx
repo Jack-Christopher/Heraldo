@@ -33,7 +33,7 @@ export default function Dashboard() {
         <h2>Límites</h2>
         <ul>
           <li>Máximo <strong>{limits.max_pdfs_per_user} PDFs</strong> por usuario.</li>
-          <li>Por PDF: hasta <strong>{limits.max_pages_per_pdf} páginas</strong> y <strong>{limits.max_words_per_pdf.toLocaleString()} palabras</strong> (equivalente a ~5 páginas de texto estándar).</li>
+          <li>Por PDF: hasta <strong>{limits.max_words_per_pdf.toLocaleString()} palabras</strong>.</li>
         </ul>
         <p className="quota">Cuota: {remaining} de {limits.max_pdfs_per_user} disponibles.</p>
       </section>

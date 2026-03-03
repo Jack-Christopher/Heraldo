@@ -6,11 +6,18 @@ from pathlib import Path
 
 # Limits (business rules)
 MAX_PDFS_PER_USER = 2
-MAX_PAGES_PER_PDF = 5
 MAX_WORDS_PER_PDF = 1500
 
 # Paths
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Email (for verification)
+MAIL_SERVER = os.environ.get("MAIL_SERVER", "")
+MAIL_PORT = int(os.environ.get("MAIL_PORT", "587"))
+MAIL_USERNAME = os.environ.get("MAIL_USERNAME", "")
+MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD", "")
+MAIL_FROM = os.environ.get("MAIL_FROM", "")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3001")
 OUTPUTS_DIR = os.environ.get("OUTPUTS_DIR", str(BASE_DIR / "outputs"))
 UPLOADS_DIR = os.environ.get("UPLOADS_DIR", str(BASE_DIR / "uploads"))
 
@@ -26,8 +33,13 @@ class Config:
     UPLOADS_DIR = UPLOADS_DIR
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB max upload
     MAX_PDFS_PER_USER = MAX_PDFS_PER_USER
-    MAX_PAGES_PER_PDF = MAX_PAGES_PER_PDF
     MAX_WORDS_PER_PDF = MAX_WORDS_PER_PDF
+    MAIL_SERVER = MAIL_SERVER
+    MAIL_PORT = MAIL_PORT
+    MAIL_USERNAME = MAIL_USERNAME
+    MAIL_PASSWORD = MAIL_PASSWORD
+    MAIL_FROM = MAIL_FROM
+    FRONTEND_URL = FRONTEND_URL
 
 
 class DevelopmentConfig(Config):

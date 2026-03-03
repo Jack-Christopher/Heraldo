@@ -33,11 +33,12 @@ def create_app(config_name=None):
     from .routes.limits_routes import limits_bp
     app.register_blueprint(limits_bp, url_prefix="/api")
 
-    # Ensure MongoDB indexes
+    # Run MongoDB migrations (structure + data; idempotent, no-op on subsequent deploys)
     with app.app_context():
         try:
-            from .models import get_db, ensure_indexes
-            ensure_indexes(get_db())
+            from .models import get_db
+            from migrations.runner import run_migrations
+            run_migrations(get_db())
         except Exception:
             pass  # MongoDB may not be ready yet
 

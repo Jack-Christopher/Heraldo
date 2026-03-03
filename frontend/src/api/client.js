@@ -34,10 +34,19 @@ export async function register(username, password, email) {
   const res = await fetch(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: getHeaders(false),
-    body: JSON.stringify({ username, password, email: email || undefined }),
+    body: JSON.stringify({ username, password, email }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Registration failed');
+  if (!res.ok) throw new Error(data.error || 'Error al registrarse');
+  return data;
+}
+
+export async function verifyEmail(token) {
+  const res = await fetch(`${API_BASE}/auth/verify-email?token=${encodeURIComponent(token)}`, {
+    method: 'GET',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Error al verificar');
   return data;
 }
 
@@ -79,6 +88,19 @@ export async function fetchDocumentStatus(id) {
   return res.json();
 }
 
+export async function countPdfWords(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`${API_BASE}/pdf/count-words`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body: formData,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Error al contar palabras');
+  return data;
+}
+
 export async function uploadPdf(file) {
   const formData = new FormData();
   formData.append('file', file);
@@ -88,8 +110,42 @@ export async function uploadPdf(file) {
     body: formData,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Upload failed');
+  if (!res.ok) {
+    const err = new Error(data.error || 'Upload failed');
+    if (data.word_count != null) err.wordCount = data.word_count;
+    throw err;
+  }
   return data;
+}
+
+export async function getPlayToken(id) {
+  const res = await fetch(`${API_BASE}/pdf/${id}/play-token`, {
+    method: 'POST',
+    headers: getHeaders(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to get play token');
+  return data.token;
+}
+
+/** Stream URL for in-browser playback (no full download). Token valid 1h. */
+export function getStreamUrl(id, token) {
+  return `/api/pdf/${id}/stream?t=${encodeURIComponent(token)}`;
+}
+
+export async function getPdfViewToken(id) {
+  const res = await fetch(`${API_BASE}/pdf/${id}/view-pdf-token`, {
+    method: 'POST',
+    headers: getHeaders(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to get view token');
+  return data.token;
+}
+
+/** URL to view the uploaded PDF in a new tab. Token valid 1h. */
+export function getPdfViewUrl(id, token) {
+  return `/api/pdf/${id}/view?t=${encodeURIComponent(token)}`;
 }
 
 export async function downloadAudio(id, filename) {
@@ -101,7 +157,7 @@ export async function downloadAudio(id, filename) {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filename || 'audio.wav';
+  a.download = filename || 'audio.mp3';
   a.click();
   window.URL.revokeObjectURL(url);
 }

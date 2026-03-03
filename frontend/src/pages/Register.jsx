@@ -8,6 +8,7 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const { user, register } = useAuth();
   const navigate = useNavigate();
 
@@ -22,15 +23,34 @@ export default function Register() {
       setError('La contraseña debe tener al menos 6 caracteres');
       return;
     }
+    if (!email || !email.includes('@')) {
+      setError('El email es obligatorio');
+      return;
+    }
     setLoading(true);
     try {
-      await register(username, password, email || undefined);
-      navigate('/');
+      await register(username, password, email);
+      setSuccess(true);
     } catch (err) {
       setError(err.message || 'Error al registrarse');
     } finally {
       setLoading(false);
     }
+  }
+
+  if (success) {
+    return (
+      <div className="auth-page">
+        <h1>Heraldo</h1>
+        <p className="subtitle">Revisa tu email</p>
+        <div className="success">
+          Te enviamos un correo a <strong>{email}</strong>. Haz clic en el enlace para confirmar tu cuenta.
+        </div>
+        <p>
+          <Link to="/login">Iniciar sesión</Link>
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -49,18 +69,19 @@ export default function Register() {
           autoFocus
         />
         <input
+          type="email"
+          placeholder="Email (obligatorio)"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        <input
           type="password"
           placeholder="Contraseña (mín. 6 caracteres)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={6}
-        />
-        <input
-          type="email"
-          placeholder="Email (opcional)"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
         />
         <button type="submit" disabled={loading}>
           {loading ? 'Registrando...' : 'Registrarse'}

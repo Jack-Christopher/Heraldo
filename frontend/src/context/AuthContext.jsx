@@ -30,8 +30,10 @@ export function AuthProvider({ children }) {
 
   const register = async (username, password, email) => {
     const data = await apiRegister(username, password, email);
-    localStorage.setItem('heraldo_token', data.token);
-    setUser(data.user);
+    if (data.token) {
+      localStorage.setItem('heraldo_token', data.token);
+      setUser(data.user);
+    }
     return data;
   };
 

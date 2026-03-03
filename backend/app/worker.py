@@ -21,7 +21,7 @@ def _get_pdf_name(pdf_path: str) -> str:
 
 def _get_output_audio_path(output_dir: str, pdf_path: str) -> str:
     name = _get_pdf_name(pdf_path)
-    return os.path.join(output_dir, f"{name}.wav")
+    return os.path.join(output_dir, f"{name}.mp3")
 
 
 def _worker_loop(app):
@@ -51,7 +51,7 @@ def _worker_loop(app):
 
                 document_update_status(doc_id, "processing")
 
-                success, err = run_pipeline(pdf_path, output_dir)
+                success, err = run_pipeline(pdf_path, output_dir, doc_id=doc_id)
                 if success:
                     audio_path = _get_output_audio_path(output_dir, pdf_path)
                     document_update_status(doc_id, "completed", output_path=audio_path)
