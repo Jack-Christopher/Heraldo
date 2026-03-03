@@ -72,7 +72,6 @@ def main():
         ("requests", "requests"),
         ("tqdm", "tqdm"),
         ("gtts", "gtts"),
-        ("pyttsx3", "pyttsx3"),
     ]
     
     for pkg_name, import_name in packages:
@@ -145,22 +144,6 @@ def main():
     print("\n4.2. Google TTS (gTTS):")
     gtts_installed = check_python_package("gtts", "gtts")
     results["tts_engines"].append(("gtts", gtts_installed))
-    
-    # pyttsx3
-    print("\n4.3. pyttsx3:")
-    pyttsx3_installed = check_python_package("pyttsx3", "pyttsx3")
-    if pyttsx3_installed:
-        try:
-            import pyttsx3
-            engine = pyttsx3.init()
-            voices = engine.getProperty('voices')
-            print(f"  ✓ pyttsx3 funcionando, {len(voices)} voces disponibles")
-            if voices:
-                print(f"    Voz predeterminada: {voices[0].name if voices else 'N/A'}")
-        except Exception as e:
-            print(f"  ✗ pyttsx3 instalado pero no funciona: {e}")
-            pyttsx3_installed = False
-    results["tts_engines"].append(("pyttsx3", pyttsx3_installed))
     
     # 5. Verificar ffmpeg (opcional, para gTTS)
     print_header("5. HERRAMIENTAS ADICIONALES")

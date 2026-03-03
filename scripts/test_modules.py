@@ -173,8 +173,8 @@ def test_tts_engines():
     print("=" * 60)
     
     try:
-        from heraldo.tts_engine import create_tts_engine, gTTSEngine, Pyttsx3Engine
-        
+        from heraldo.tts_engine import create_tts_engine, gTTSEngine
+
         # Probar gTTS
         print("\n6.1. Google TTS (gTTS):")
         gtts = gTTSEngine(lang="es")
@@ -182,17 +182,9 @@ def test_tts_engines():
             print("✓ gTTS está disponible")
         else:
             print("✗ gTTS no está disponible")
-        
-        # Probar pyttsx3
-        print("\n6.2. pyttsx3:")
-        pyttsx3_engine = Pyttsx3Engine()
-        if pyttsx3_engine.is_available():
-            print("✓ pyttsx3 está disponible")
-        else:
-            print("✗ pyttsx3 no está disponible")
-        
+
         # Probar factory
-        print("\n6.3. Factory function:")
+        print("\n6.2. Factory function:")
         try:
             engine = create_tts_engine("gtts")
             print("✓ Factory function funciona para gtts")
