@@ -14,7 +14,6 @@
 - ✓ requests - Cliente HTTP
 - ✓ tqdm - Barras de progreso
 - ✓ gtts - Google TTS
-- ✓ pyttsx3 - TTS offline
 - ✓ torch - PyTorch con soporte CUDA (RTX 3050 detectada)
 
 ### 3. Ollama
@@ -25,7 +24,6 @@
 
 ### 4. Motores TTS
 - ✓ **gTTS**: Disponible y funcionando
-- ✓ **pyttsx3**: Disponible y funcionando (109 voces disponibles)
 - ✓ **Piper TTS**: `piper-bin` encontrado en `/usr/local/bin/piper-bin`
   - ⚠️ Falta: Modelo de voz (necesita descargar modelo .onnx)
 
@@ -89,16 +87,13 @@ python test_ollama_connection.py
 # Con gTTS (requiere internet)
 python -m heraldo.main --pdf documento.pdf --tts-engine gtts --model phi3:mini
 
-# Con pyttsx3 (offline)
-python -m heraldo.main --pdf documento.pdf --tts-engine pyttsx3 --model phi3:mini
-
 # Con Piper (cuando tengas el modelo)
 python -m heraldo.main --pdf documento.pdf --tts-engine piper --voice /ruta/al/modelo.onnx --model phi3:mini
 ```
 
 ## 🎯 Estado General
 
-**Sistema**: ✅ **LISTO PARA USAR** (con gTTS o pyttsx3)
+**Sistema**: ✅ **LISTO PARA USAR** (con gTTS, Piper o XTTS)
 
 **Piper TTS**: ⚠️ Requiere descargar modelo de voz
 

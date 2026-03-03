@@ -8,7 +8,6 @@ import subprocess
 from abc import ABC, abstractmethod
 from typing import Optional
 from gtts import gTTS
-import pyttsx3
 
 
 class TTSEngine(ABC):
@@ -46,40 +45,78 @@ class PiperTTS(TTSEngine):
     Motor TTS usando Piper (ejecutable local ultra rápido).
     """
     
-    def __init__(self, piper_path: Optional[str] = None, voice: Optional[str] = None, lang: str = "es"):
+    def __init__(
+        self,
+        piper_path: Optional[str] = None,
+        voice: Optional[str] = None,
+        lang: str = "es",
+        max_chunk_length: int = 2000,
+        length_scale: float = 1.0,
+        noise_scale: float = 0.667,
+        noise_w: float = 0.8,
+        sentence_silence: float = 0.3,
+        speaker: int = 0,
+    ):
         """
         Inicializa el motor Piper TTS.
-        
+
         Args:
             piper_path: Ruta al ejecutable de Piper (o None para usar PATH)
             voice: Nombre del modelo de voz (ej: es_ES-davefx-medium)
             lang: Código de idioma para seleccionar voz por defecto (default: "es")
+            max_chunk_length: Longitud máxima de texto por chunk en caracteres (default: 2000)
+            length_scale: Duración de fonemas; <1 más rápido, >1 más lento (default: 1.0)
+            noise_scale: Ruido del generador; más variabilidad de voz (default: 0.667)
+            noise_w: Ruido de ancho de fonemas (default: 0.8)
+            sentence_silence: Segundos de silencio entre oraciones (default: 0.3 para audiolibros)
+            speaker: ID de hablante en modelos multi-speaker (default: 0)
         """
+        def _float_from_env(name: str, default: float) -> float:
+            val = os.environ.get(name)
+            if val is None:
+                return default
+            try:
+                return float(val)
+            except ValueError:
+                return default
+
         self.piper_path = piper_path or os.environ.get("PIPER_PATH", "piper-bin")
         self.voice = voice or os.environ.get("PIPER_VOICE")
-        
+        self.max_chunk_length = max_chunk_length
+        self.lang = lang
+        self.length_scale = _float_from_env("PIPER_LENGTH_SCALE", length_scale)
+        self.noise_scale = _float_from_env("PIPER_NOISE_SCALE", noise_scale)
+        self.noise_w = _float_from_env("PIPER_NOISE_W", noise_w)
+        self.sentence_silence = _float_from_env("PIPER_SENTENCE_SILENCE", sentence_silence)
+        env_speaker = os.environ.get("PIPER_SPEAKER")
+        if env_speaker is not None:
+            try:
+                self.speaker = int(env_speaker)
+            except ValueError:
+                self.speaker = speaker
+        else:
+            self.speaker = speaker
+
+        # Voces alternativas por idioma (para usar si la principal no está instalada)
+        self._lang_voices_alt = {
+            'es': ['es_ES-davefx-medium', 'es_ES-shared-medium', 'es_ES-carlfm-medium', 'es_AR-tango-medium', 'es_CO-carlfm-medium', 'es_CL-catalina-medium'],
+            'en': ['en_US-lessac-medium', 'en_GB-alba-medium'],
+            'fr': ['fr_FR-upmc-medium'],
+            'de': ['de_DE-thorsten-medium'],
+            'it': ['it_IT-riccardo-medium'],
+            'pt': ['pt_BR-faber-medium'],
+        }
+
         # Si voice no está especificado, usar uno por defecto basado en el idioma
         if not self.voice:
-            # Modelos por idioma (priorizando español latinoamericano)
             lang_voices = {
-                'es': 'es_MX-ald-medium',  # Español - México (más neutral)
-                'en': 'en_US-lessac-medium',  # Inglés - US
-                'fr': 'fr_FR-upmc-medium',  # Francés
-                'de': 'de_DE-thorsten-medium',  # Alemán
-                'it': 'it_IT-riccardo-medium',  # Italiano
-                'pt': 'pt_BR-faber-medium',  # Portugués - Brasil
+                'es': 'es_ES-davefx-medium',
+                'en': 'en_US-lessac-medium',
+                'fr': 'fr_FR-upmc-medium',
+                'de': 'de_DE-thorsten-medium',
+                'it': 'it_IT-riccardo-medium',
+                'pt': 'pt_BR-faber-medium',
             }
-            # Modelos alternativos si el principal no está disponible
-            lang_voices_alt = {
-                'es': ['es_MX-ald-medium', 'es_ES-davefx-medium', 'es_AR-tango-medium'],
-                'en': ['en_US-lessac-medium', 'en_GB-alba-medium'],
-                'fr': ['fr_FR-upmc-medium'],
-                'de': ['de_DE-thorsten-medium'],
-                'it': ['it_IT-riccardo-medium'],
-                'pt': ['pt_BR-faber-medium'],
-            }
-            
-            # Usar el modelo principal para el idioma, o el primero de la lista
             self.voice = lang_voices.get(lang, lang_voices['es'])
     
     def is_available(self) -> bool:
@@ -97,6 +134,7 @@ class PiperTTS(TTSEngine):
     def synthesize(self, text: str, output_path: str) -> bool:
         """
         Sintetiza texto usando Piper TTS.
+        Divide el texto en chunks si es muy largo.
         
         Args:
             text: Texto a sintetizar
@@ -115,39 +153,163 @@ class PiperTTS(TTSEngine):
                 "Usa --voice o configura PIPER_VOICE."
             )
         
-        # Construir ruta al modelo (asumiendo formato estándar)
-        # El usuario debe tener el modelo descargado
-        model_path = self.voice
-        
-        # Si la ruta no existe, intentar varias ubicaciones comunes
-        if not os.path.exists(model_path):
-            # Intentar con extensión .onnx
-            if not model_path.endswith('.onnx'):
-                model_path_onnx = f"{self.voice}.onnx"
-                if os.path.exists(model_path_onnx):
-                    model_path = model_path_onnx
+        # Resolver ruta al modelo: probar voz principal y luego alternativas del idioma
+        def resolve_voice_path(voice_name: str) -> Optional[str]:
+            if os.path.exists(voice_name):
+                return voice_name
+            if not voice_name.endswith('.onnx') and os.path.exists(f"{voice_name}.onnx"):
+                return f"{voice_name}.onnx"
+            for path in [
+                os.path.join(os.path.expanduser("~"), ".local", "share", "piper", "voices", voice_name, f"{voice_name}.onnx"),
+                os.path.join(".", "models", f"{voice_name}.onnx"),
+                os.path.join(".", f"{voice_name}.onnx"),
+            ]:
+                if os.path.exists(path):
+                    return path
+            return None
+
+        model_path = resolve_voice_path(self.voice)
+        if not model_path:
+            # Probar voces alternativas del mismo idioma
+            for alt_voice in self._lang_voices_alt.get(self.lang, [self.voice]):
+                if alt_voice == self.voice:
+                    continue
+                model_path = resolve_voice_path(alt_voice)
+                if model_path:
+                    if not getattr(self, "_voice_fallback_reported", False):
+                        print(f"  Nota: Usando voz '{alt_voice}' (no se encontró '{self.voice}').")
+                        self._voice_fallback_reported = True
+                    break
+        if not model_path:
+            tried = [self.voice] + [v for v in self._lang_voices_alt.get(self.lang, []) if v != self.voice]
+            raise FileNotFoundError(
+                f"Ningún modelo de voz de Piper encontrado (probados: {', '.join(tried)}). "
+                "Descarga un .onnx desde https://huggingface.co/rhasspy/piper-voices/tree/main/es "
+                "y colócalo en ./models/ o pasa --voice con la ruta al archivo."
+            )
+
+        # Dividir texto en chunks si es muy largo
+        if len(text) > self.max_chunk_length:
+            # Dividir por oraciones usando nltk o regex
+            import re
+            try:
+                import nltk
+                try:
+                    sentences = nltk.sent_tokenize(text)
+                except (LookupError, Exception):
+                    # Fallback: división simple por puntuación
+                    sentences = re.split(r'[.!?]+\s+', text)
+                    sentences = [s.strip() for s in sentences if s.strip()]
+            except ImportError:
+                # Si nltk no está disponible, usar regex
+                sentences = re.split(r'[.!?]+\s+', text)
+                sentences = [s.strip() for s in sentences if s.strip()]
+            
+            # Crear chunks de aproximadamente max_chunk_length caracteres
+            chunks = []
+            current_chunk = []
+            current_length = 0
+            
+            for sentence in sentences:
+                sentence_length = len(sentence)
+                
+                # Si agregar esta oración excede el límite y ya hay contenido, guardar chunk
+                if current_length + sentence_length > self.max_chunk_length and current_chunk:
+                    chunks.append(' '.join(current_chunk))
+                    current_chunk = [sentence]
+                    current_length = sentence_length
                 else:
-                    # Intentar en directorio de modelos común
-                    possible_paths = [
-                        os.path.join(os.path.expanduser("~"), ".local", "share", "piper", "voices", self.voice, f"{self.voice}.onnx"),
-                        os.path.join(".", "models", f"{self.voice}.onnx"),
-                        os.path.join(".", f"{self.voice}.onnx"),
-                    ]
-                    for path in possible_paths:
-                        if os.path.exists(path):
-                            model_path = path
-                            break
-                    else:
-                        # Si no se encuentra, usar el nombre tal cual (piper puede buscarlo)
-                        model_path = self.voice
+                    current_chunk.append(sentence)
+                    current_length += sentence_length + 1  # +1 por el espacio
+            
+            # Agregar el último chunk
+            if current_chunk:
+                chunks.append(' '.join(current_chunk))
+            
+            # Si hay múltiples chunks, procesar cada uno y combinar
+            if len(chunks) > 1:
+                import wave
+                temp_files = []
+                
+                for i, chunk in enumerate(chunks):
+                    temp_file = output_path.replace('.wav', f'_temp_{i}.wav')
+                    temp_dir = os.path.dirname(temp_file)
+                    if temp_dir and not os.path.exists(temp_dir):
+                        os.makedirs(temp_dir, exist_ok=True)
+                    
+                    # Procesar chunk individual
+                    if not self._synthesize_chunk(chunk, model_path, temp_file):
+                        print(f"Error al procesar chunk {i+1} de {len(chunks)}")
+                        continue
+                    
+                    if os.path.exists(temp_file) and os.path.getsize(temp_file) > 0:
+                        temp_files.append(temp_file)
+                
+                # Combinar archivos de audio
+                if temp_files:
+                    try:
+                        with wave.open(temp_files[0], 'rb') as first:
+                            params = first.getparams()
+                            with wave.open(output_path, 'wb') as outfile:
+                                outfile.setparams(params)
+                                outfile.writeframes(first.readframes(first.getnframes()))
+                                
+                                for temp_file in temp_files[1:]:
+                                    with wave.open(temp_file, 'rb') as infile:
+                                        if infile.getparams() == params:
+                                            outfile.writeframes(infile.readframes(infile.getnframes()))
+                                        else:
+                                            print(f"Advertencia: Parámetros diferentes en {temp_file}, saltando...")
+                        
+                        # Limpiar archivos temporales
+                        for temp_file in temp_files:
+                            if os.path.exists(temp_file):
+                                os.remove(temp_file)
+                        
+                        return os.path.exists(output_path) and os.path.getsize(output_path) > 0
+                    except Exception as e:
+                        print(f"Error al combinar chunks de audio: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        return False
+                else:
+                    print("Error: No se generaron chunks de audio")
+                    return False
+            else:
+                # Solo un chunk, procesar normalmente
+                return self._synthesize_chunk(text, model_path, output_path)
+        else:
+            # Texto corto, procesar directamente
+            return self._synthesize_chunk(text, model_path, output_path)
+    
+    def _synthesize_chunk(self, text: str, model_path: str, output_path: str) -> bool:
+        """
+        Sintetiza un chunk de texto usando Piper.
         
+        Args:
+            text: Texto a sintetizar
+            model_path: Ruta al modelo de Piper
+            output_path: Ruta donde guardar el archivo WAV
+        
+        Returns:
+            True si fue exitoso, False en caso contrario
+        """
         try:
-            # Ejecutar Piper
-            # Formato: piper --model model.onnx --output_file output.wav
+            # Asegurar que el directorio existe
+            output_dir = os.path.dirname(output_path)
+            if output_dir and not os.path.exists(output_dir):
+                os.makedirs(output_dir, exist_ok=True)
+            
+            # Ejecutar Piper con parámetros de síntesis configurables
             cmd = [
                 self.piper_path,
                 "--model", model_path,
-                "--output_file", output_path
+                "--output_file", output_path,
+                "--length_scale", str(self.length_scale),
+                "--noise_scale", str(self.noise_scale),
+                "--noise_w", str(self.noise_w),
+                "--sentence_silence", str(self.sentence_silence),
+                "--speaker", str(self.speaker),
             ]
             
             process = subprocess.Popen(
@@ -164,13 +326,15 @@ class PiperTTS(TTSEngine):
                 print(f"Error al ejecutar Piper: {stderr}")
                 return False
             
-            return os.path.exists(output_path)
+            return os.path.exists(output_path) and os.path.getsize(output_path) > 0
         
         except subprocess.TimeoutExpired:
             print("Timeout al ejecutar Piper TTS")
             return False
         except Exception as e:
             print(f"Error al sintetizar con Piper: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
 
@@ -238,303 +402,222 @@ class gTTSEngine(TTSEngine):
             return False
 
 
-class Pyttsx3Engine(TTSEngine):
+class XTTSEngine(TTSEngine):
     """
-    Motor TTS usando pyttsx3 (offline, multiplataforma).
+    Motor TTS usando Coqui XTTS v2 (clonación de voz, multilingüe).
+    Requiere: speaker_wav (ruta a audio de referencia) o speaker (nombre de voz Coqui).
     """
-    
-    def __init__(self, voice_id: Optional[int] = None, rate: int = 150, sentences_per_chunk: int = 10, lang: str = "es"):
+
+    XTTS_MODEL = "tts_models/multilingual/multi-dataset/xtts_v2"
+    # Voces Coqui por defecto por idioma (built-in, sin clonación)
+    _DEFAULT_SPEAKERS = {
+        "es": "Ana Florence",
+        "en": "Ana Florence",
+        "fr": "Ana Florence",
+        "de": "Ana Florence",
+        "it": "Ana Florence",
+        "pt": "Ana Florence",
+    }
+    _MAX_CHUNK_LENGTH = 500  # XTTS funciona mejor con chunks cortos
+
+    def __init__(
+        self,
+        lang: str = "es",
+        speaker_wav: Optional[str] = None,
+        speaker: Optional[str] = None,
+        use_cuda: bool = True,
+        max_chunk_length: int = 500,
+    ):
         """
-        Inicializa el motor pyttsx3.
-        
+        Inicializa el motor XTTS.
+
         Args:
-            voice_id: ID de la voz a usar (None para buscar voz en el idioma especificado)
-            rate: Velocidad de habla en palabras por minuto (default: 150)
-            sentences_per_chunk: Número de oraciones por chunk (default: 10)
-            lang: Código de idioma para buscar voz (default: "es" para español)
+            lang: Código de idioma (es, en, fr, de, it, pt, etc.)
+            speaker_wav: Ruta a archivo WAV de referencia para clonar voz (~3+ segundos)
+            speaker: Nombre de voz Coqui built-in (ej: "Ana Florence"). Si speaker_wav está definido, se ignora.
+            use_cuda: Usar GPU si está disponible
+            max_chunk_length: Máximo de caracteres por chunk (default 500)
         """
-        self.voice_id = voice_id
-        self.rate = rate
-        self.sentences_per_chunk = sentences_per_chunk
-        self.lang = lang
-        self.engine = None
-    
-    def _initialize_engine(self):
-        """Inicializa el motor pyttsx3."""
-        if self.engine is None:
+        self.lang = self._map_lang(lang)
+        self.speaker_wav = speaker_wav or os.environ.get("XTTS_SPEAKER_WAV")
+        self.speaker = speaker or os.environ.get("XTTS_SPEAKER")
+        self.use_cuda = use_cuda
+        self.max_chunk_length = max_chunk_length or self._MAX_CHUNK_LENGTH
+        self._tts = None
+
+    @staticmethod
+    def _map_lang(lang: str) -> str:
+        """Mapea códigos de idioma al formato XTTS (en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh-cn, ja, hu, ko)."""
+        m = {"es": "es", "en": "en", "fr": "fr", "de": "de", "it": "it", "pt": "pt"}
+        return m.get(lang.lower(), lang)
+
+    def _get_tts(self):
+        """Carga el modelo XTTS de forma lazy."""
+        if self._tts is None:
             try:
-                self.engine = pyttsx3.init()
-                voices = self.engine.getProperty('voices')
-                
-                # Si se especificó un voice_id, usarlo
-                if self.voice_id is not None:
-                    if self.voice_id < len(voices):
-                        self.engine.setProperty('voice', voices[self.voice_id].id)
-                else:
-                    # Buscar voz en el idioma especificado
-                    voice_found = False
-                    lang_code = self.lang.lower()
-                    
-                    # PRIMERO buscar por nombre (más confiable que ID)
-                    lang_keywords = {
-                        'es': ['spanish', 'español'],
-                        'en': ['english', 'inglés'],
-                        'fr': ['french', 'francés'],
-                        'de': ['german', 'alemán'],
-                        'it': ['italian', 'italiano'],
-                        'pt': ['portuguese', 'portugués']
-                    }
-                    keywords = lang_keywords.get(lang_code, lang_keywords['es'])
-                    
-                    for voice in voices:
-                        voice_name_lower = voice.name.lower()
-                        if any(keyword in voice_name_lower for keyword in keywords):
-                            self.engine.setProperty('voice', voice.id)
-                            voice_found = True
-                            break
-                    
-                    # Si no se encontró por nombre, buscar por ID
-                    if not voice_found:
-                        # Buscar patrones específicos en el ID: "roa/es", "roa/es-", etc.
-                        for voice in voices:
-                            voice_id_lower = voice.id.lower()
-                            
-                            # Para español, buscar específicamente "roa/es" (no "/es" que coincide con "/en")
-                            if lang_code == 'es':
-                                if 'roa/es' in voice_id_lower:
-                                    self.engine.setProperty('voice', voice.id)
-                                    voice_found = True
-                                    break
-                            else:
-                                # Para otros idiomas
-                                if f'roa/{lang_code}' in voice_id_lower or f'gmw/{lang_code}' in voice_id_lower:
-                                    self.engine.setProperty('voice', voice.id)
-                                    voice_found = True
-                                    break
-                    
-                    # Si no se encontró, usar la primera voz disponible
-                    if not voice_found and voices:
-                        self.engine.setProperty('voice', voices[0].id)
-                
-                self.engine.setProperty('rate', self.rate)
-            except Exception as e:
-                raise RuntimeError(f"No se pudo inicializar pyttsx3: {e}")
-    
+                from TTS.api import TTS
+            except ImportError:
+                raise ImportError(
+                    "Coqui TTS no está instalado. Instala con: pip install coqui-tts"
+                )
+            gpu = self.use_cuda
+            try:
+                import torch
+                gpu = gpu and torch.cuda.is_available()
+            except ImportError:
+                gpu = False
+            self._tts = TTS(self.XTTS_MODEL, gpu=gpu)
+        return self._tts
+
     def is_available(self) -> bool:
-        """Verifica si pyttsx3 está disponible."""
+        """Verifica si XTTS está disponible."""
         try:
-            self._initialize_engine()
-            return self.engine is not None
-        except Exception:
+            self._get_tts()
+            return True
+        except Exception as e:
+            import sys
+            import traceback
+            print(f"XTTS no disponible: {e}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
             return False
-    
+
+    def _resolve_speaker(self) -> tuple:
+        """
+        Resuelve speaker_wav o speaker.
+        Returns: (speaker_wav_list or None, speaker_name or None)
+        """
+        wav = self.speaker_wav
+        name = self.speaker
+
+        if wav and os.path.isfile(wav):
+            return ([wav], None)
+        if wav:
+            paths = [p.strip() for p in wav.split(",") if p.strip()]
+            valid = [p for p in paths if os.path.isfile(p)]
+            if valid:
+                return (valid, None)
+            # No es ruta válida: tratar como nombre de voz built-in (ej: "Ana Florence")
+            return (None, wav)
+
+        return (None, name or self._DEFAULT_SPEAKERS.get(self.lang, "Ana Florence"))
+
     def synthesize(self, text: str, output_path: str) -> bool:
         """
-        Sintetiza texto usando pyttsx3.
-        
-        Args:
-            text: Texto a sintetizar
-            output_path: Ruta donde guardar el archivo WAV
+        Sintetiza texto usando XTTS.
+        Divide en chunks si es necesario.
         """
+        if not text.strip():
+            return False
+
+        speaker_wav_list, speaker_name = self._resolve_speaker()
+        if not speaker_wav_list and not speaker_name:
+            raise ValueError(
+                "XTTS requiere --voice con ruta a WAV de referencia para clonar voz, "
+                "o configura XTTS_SPEAKER con el nombre de una voz Coqui (ej: Ana Florence)."
+            )
+
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+
+        if len(text) <= self.max_chunk_length:
+            return self._synthesize_chunk(
+                text, output_path, speaker_wav_list, speaker_name
+            )
+
+        # Dividir en chunks por oraciones
+        import re
         try:
-            self._initialize_engine()
-            
-            # Establecer la voz correcta antes de sintetizar (pyttsx3 puede perder la configuración)
-            if self.voice_id is None:
-                voices = self.engine.getProperty('voices')
-                lang_code = self.lang.lower()
-                lang_keywords = {
-                    'es': ['spanish', 'español'],
-                    'en': ['english', 'inglés'],
-                    'fr': ['french', 'francés'],
-                    'de': ['german', 'alemán'],
-                    'it': ['italian', 'italiano'],
-                    'pt': ['portuguese', 'portuguese']
-                }
-                keywords = lang_keywords.get(lang_code, lang_keywords['es'])
-                
-                for voice in voices:
-                    voice_name_lower = voice.name.lower()
-                    if any(keyword in voice_name_lower for keyword in keywords):
-                        self.engine.setProperty('voice', voice.id)
-                        break
-                else:
-                    # Si no se encontró por nombre, buscar por ID
-                    for voice in voices:
-                        voice_id_lower = voice.id.lower()
-                        if lang_code == 'es' and 'roa/es' in voice_id_lower:
-                            self.engine.setProperty('voice', voice.id)
-                            break
-                        elif f'roa/{lang_code}' in voice_id_lower or f'gmw/{lang_code}' in voice_id_lower:
-                            self.engine.setProperty('voice', voice.id)
-                            break
-            
-            # Asegurar que el directorio existe
-            output_dir = os.path.dirname(output_path)
-            if output_dir and not os.path.exists(output_dir):
-                os.makedirs(output_dir, exist_ok=True)
-            
-            # Dividir texto en chunks de oraciones (pyttsx3 funciona mejor con textos cortos)
-            import re
             import nltk
-            
-            # Intentar usar nltk para tokenización
             try:
                 sentences = nltk.sent_tokenize(text)
-            except LookupError:
-                # Si falta punkt_tab, descargarlo automáticamente
-                try:
-                    nltk.download('punkt_tab', quiet=True)
-                    sentences = nltk.sent_tokenize(text)
-                except:
-                    # Fallback: división simple por puntuación y longitud
-                    sentences = re.split(r'[.!?]+\s+', text)
-                    sentences = [s.strip() for s in sentences if s.strip()]
-                    # Si no hay puntos, dividir por longitud aproximada (150 caracteres = ~1 oración)
-                    if len(sentences) == 1 and len(text) > 200:
-                        # Dividir por espacios cada ~150 caracteres
-                        words = text.split()
-                        current_sentence = []
-                        sentences = []
-                        current_length = 0
-                        for word in words:
-                            current_sentence.append(word)
-                            current_length += len(word) + 1
-                            if current_length > 150:
-                                sentences.append(' '.join(current_sentence))
-                                current_sentence = []
-                                current_length = 0
-                        if current_sentence:
-                            sentences.append(' '.join(current_sentence))
-            except:
-                # Fallback final: división simple por puntuación
+            except (LookupError, Exception):
                 sentences = re.split(r'[.!?]+\s+', text)
                 sentences = [s.strip() for s in sentences if s.strip()]
-                # Si aún no hay divisiones, dividir por longitud
-                if len(sentences) == 1 and len(text) > 200:
-                    words = text.split()
-                    current_sentence = []
-                    sentences = []
-                    current_length = 0
-                    for word in words:
-                        current_sentence.append(word)
-                        current_length += len(word) + 1
-                        if current_length > 150:
-                            sentences.append(' '.join(current_sentence))
-                            current_sentence = []
-                            current_length = 0
-                    if current_sentence:
-                        sentences.append(' '.join(current_sentence))
-            
-            # Dividir en chunks del tamaño especificado
-            chunks = []
-            for i in range(0, len(sentences), self.sentences_per_chunk):
-                chunk = ' '.join(sentences[i:i + self.sentences_per_chunk])
-                if chunk.strip():
-                    # Asegurar que termina con puntuación
-                    if not re.search(r'[.!?]$', chunk.strip()):
-                        chunk += '.'
-                    chunks.append(chunk.strip())
-            
-            # Si hay múltiples chunks o texto largo, procesar por chunks
-            if len(chunks) > 1:
-                # Procesar cada chunk y combinar
-                import wave
-                temp_files = []
-                
-                for i, chunk in enumerate(chunks):
-                    temp_file = output_path.replace('.wav', f'_temp_{i}.wav')
-                    # Asegurar que el directorio del archivo temporal existe
-                    temp_dir = os.path.dirname(temp_file)
-                    if temp_dir and not os.path.exists(temp_dir):
-                        os.makedirs(temp_dir, exist_ok=True)
-                    
-                    # Establecer la voz correcta antes de cada chunk
-                    if self.voice_id is None:
-                        voices = self.engine.getProperty('voices')
-                        lang_code = self.lang.lower()
-                        lang_keywords = {
-                            'es': ['spanish', 'español'],
-                            'en': ['english', 'inglés'],
-                            'fr': ['french', 'francés'],
-                            'de': ['german', 'alemán'],
-                            'it': ['italian', 'italiano'],
-                            'pt': ['portuguese', 'portugués']
-                        }
-                        keywords = lang_keywords.get(lang_code, lang_keywords['es'])
-                        
-                        for voice in voices:
-                            voice_name_lower = voice.name.lower()
-                            if any(keyword in voice_name_lower for keyword in keywords):
-                                self.engine.setProperty('voice', voice.id)
-                                break
-                        else:
-                            # Si no se encontró por nombre, buscar por ID
-                            for voice in voices:
-                                voice_id_lower = voice.id.lower()
-                                if lang_code == 'es' and 'roa/es' in voice_id_lower:
-                                    self.engine.setProperty('voice', voice.id)
-                                    break
-                                elif f'roa/{lang_code}' in voice_id_lower or f'gmw/{lang_code}' in voice_id_lower:
-                                    self.engine.setProperty('voice', voice.id)
-                                    break
-                    
-                    try:
-                        self.engine.save_to_file(chunk, temp_file)
-                        self.engine.runAndWait()
-                        # Esperar un momento para que el archivo se escriba completamente
-                        import time
-                        time.sleep(0.5)
-                        
-                        if os.path.exists(temp_file) and os.path.getsize(temp_file) > 0:
-                            temp_files.append(temp_file)
-                        else:
-                            print(f"Advertencia: Chunk {i+1} no se generó correctamente (archivo: {temp_file})")
-                    except Exception as e:
-                        print(f"Error al procesar chunk {i+1}: {e}")
-                
-                # Combinar archivos de audio
-                if temp_files:
-                    try:
-                        with wave.open(temp_files[0], 'rb') as first:
-                            params = first.getparams()
-                            with wave.open(output_path, 'wb') as outfile:
-                                outfile.setparams(params)
-                                outfile.writeframes(first.readframes(first.getnframes()))
-                                
-                                for temp_file in temp_files[1:]:
-                                    with wave.open(temp_file, 'rb') as infile:
-                                        outfile.writeframes(infile.readframes(infile.getnframes()))
-                        
-                        # Limpiar archivos temporales
-                        for temp_file in temp_files:
-                            if os.path.exists(temp_file):
-                                os.remove(temp_file)
-                    except Exception as e:
-                        print(f"Error al combinar chunks de audio: {e}")
-                        return False
-                else:
-                    print("Error: No se generaron chunks de audio")
-                    return False
+        except ImportError:
+            sentences = re.split(r'[.!?]+\s+', text)
+            sentences = [s.strip() for s in sentences if s.strip()]
+
+        chunks = []
+        current = []
+        length = 0
+        for s in sentences:
+            if length + len(s) > self.max_chunk_length and current:
+                chunks.append(" ".join(current))
+                current = [s]
+                length = len(s)
             else:
-                # Texto corto o un solo chunk, procesar normalmente
-                self.engine.save_to_file(chunks[0] if chunks else text, output_path)
-                self.engine.runAndWait()
-            
-            # Verificar que el archivo se creó y no está vacío
-            if os.path.exists(output_path):
-                file_size = os.path.getsize(output_path)
-                if file_size > 0:
-                    return True
-                else:
-                    print(f"Advertencia: Archivo {output_path} se creó pero está vacío ({file_size} bytes)")
-                    return False
-            else:
-                print(f"Advertencia: Archivo {output_path} no se creó después de runAndWait()")
-                return False
-        
+                current.append(s)
+                length += len(s) + 1
+        if current:
+            chunks.append(" ".join(current))
+
+        if len(chunks) == 1:
+            return self._synthesize_chunk(
+                text, output_path, speaker_wav_list, speaker_name
+            )
+
+        import wave
+        temp_files = []
+        for i, chunk in enumerate(chunks):
+            tp = output_path.replace(".wav", f"_xtts_temp_{i}.wav")
+            ok = self._synthesize_chunk(
+                chunk, tp, speaker_wav_list, speaker_name
+            )
+            if ok and os.path.exists(tp) and os.path.getsize(tp) > 0:
+                temp_files.append(tp)
+
+        if not temp_files:
+            return False
+
+        try:
+            with wave.open(temp_files[0], "rb") as first:
+                params = first.getparams()
+                with wave.open(output_path, "wb") as out:
+                    out.setparams(params)
+                    out.writeframes(first.readframes(first.getnframes()))
+                    for tf in temp_files[1:]:
+                        with wave.open(tf, "rb") as inf:
+                            if inf.getparams() == params:
+                                out.writeframes(inf.readframes(inf.getnframes()))
+            for tf in temp_files:
+                if os.path.exists(tf):
+                    os.remove(tf)
+            return os.path.exists(output_path) and os.path.getsize(output_path) > 0
         except Exception as e:
-            print(f"Error al sintetizar con pyttsx3: {e}")
+            print(f"Error al combinar chunks XTTS: {e}")
+            for tf in temp_files:
+                if os.path.exists(tf):
+                    try:
+                        os.remove(tf)
+                    except OSError:
+                        pass
+            return False
+
+    def _synthesize_chunk(
+        self,
+        text: str,
+        output_path: str,
+        speaker_wav_list: Optional[list],
+        speaker_name: Optional[str],
+    ) -> bool:
+        try:
+            tts = self._get_tts()
+            kwargs = {
+                "text": text.strip(),
+                "file_path": output_path,
+                "language": self.lang,
+                "split_sentences": True,
+            }
+            if speaker_wav_list:
+                kwargs["speaker_wav"] = speaker_wav_list
+            else:
+                kwargs["speaker"] = speaker_name
+
+            tts.tts_to_file(**kwargs)
+            return os.path.exists(output_path) and os.path.getsize(output_path) > 0
+        except Exception as e:
+            print(f"Error al sintetizar con XTTS: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -545,7 +628,7 @@ def create_tts_engine(engine_name: str, **kwargs) -> TTSEngine:
     Factory function para crear instancias de motores TTS.
     
     Args:
-        engine_name: Nombre del motor ("piper", "gtts", "pyttsx3")
+        engine_name: Nombre del motor ("piper", "gtts", "xtts")
         **kwargs: Argumentos adicionales para el motor específico
     
     Returns:
@@ -555,27 +638,34 @@ def create_tts_engine(engine_name: str, **kwargs) -> TTSEngine:
         ValueError: Si el nombre del motor no es reconocido
     """
     engine_name_lower = engine_name.lower()
-    
+
     if engine_name_lower == "piper":
         return PiperTTS(
             piper_path=kwargs.get("piper_path"),
             voice=kwargs.get("voice"),
-            lang=kwargs.get("lang", "es")
+            lang=kwargs.get("lang", "es"),
+            max_chunk_length=kwargs.get("max_chunk_length", 2000),
+            length_scale=kwargs.get("length_scale", 1.0),
+            noise_scale=kwargs.get("noise_scale", 0.667),
+            noise_w=kwargs.get("noise_w", 0.8),
+            sentence_silence=kwargs.get("sentence_silence", 0.3),
+            speaker=kwargs.get("speaker", 0),
         )
     elif engine_name_lower == "gtts":
         return gTTSEngine(
             lang=kwargs.get("lang", "es"),
             slow=kwargs.get("slow", False)
         )
-    elif engine_name_lower == "pyttsx3":
-        return Pyttsx3Engine(
-            voice_id=kwargs.get("voice_id"),
-            rate=kwargs.get("rate", 150),
-            sentences_per_chunk=kwargs.get("sentences_per_chunk", 10),
-            lang=kwargs.get("lang", "es")
+    elif engine_name_lower == "xtts":
+        return XTTSEngine(
+            lang=kwargs.get("lang", "es"),
+            speaker_wav=kwargs.get("speaker_wav") or kwargs.get("voice"),
+            speaker=kwargs.get("speaker"),
+            use_cuda=kwargs.get("use_cuda", True),
+            max_chunk_length=kwargs.get("max_chunk_length", 500)
         )
     else:
         raise ValueError(
             f"Motor TTS desconocido: {engine_name}. "
-            f"Opciones disponibles: piper, gtts, pyttsx3"
+            f"Opciones disponibles: piper, gtts, xtts"
         )

@@ -13,7 +13,14 @@ tqdm>=4.66.0
 
 # TTS engines
 gtts>=2.5.0
-pyttsx3>=2.90
+coqui-tts>=0.22.0
+
+# Mezcla de audio (merge WAV con distintos parámetros)
+pydub>=0.25.0
+
+# Variables de entorno
+python-dotenv>=1.0.0
 
 # Utilidades
-torch>=2.0.0  # Para limpieza de memoria GPU (opcional pero recomendado)
+torch>=2.0.0
+torchaudio>=2.0.0  # Requerido por Coqui XTTS

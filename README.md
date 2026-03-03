@@ -7,7 +7,7 @@ Sistema robusto en Python para procesar PDFs extensos (aprox. 80,000 palabras) y
 - **Extracción inteligente de texto**: Limpia encabezados, pies de página y caracteres especiales
 - **Procesamiento con IA**: Usa Ollama local para parafrasear y enriquecer el contenido
 - **Sistema de checkpoints**: Reanuda el procesamiento desde donde se quedó
-- **Múltiples motores TTS**: Soporta Piper TTS, Google TTS, y pyttsx3
+- **Múltiples motores TTS**: Soporta Piper TTS, Google TTS y Coqui XTTS
 - **Detección automática de capítulos**: Identifica capítulos o divide en bloques configurables
 - **Optimizado para GPU**: Libera memoria después de cada bloque procesado
 
@@ -78,7 +78,7 @@ python -m heraldo.main \
 - `--pdf`: Ruta al archivo PDF (requerido)
 - `--output`: Carpeta de salida (default: `outputs/{nombre_pdf}`)
 - `--model`: Modelo de Ollama a usar (default: `llama3.1:8b`)
-- `--tts-engine`: Motor TTS (`piper`, `gtts`, `pyttsx3`) (default: `piper`)
+- `--tts-engine`: Motor TTS (`piper`, `gtts`, `xtts`) (default: `piper`)
 - `--voice`: Voz específica (depende del motor)
 - `--resume`: Reanudar desde el último checkpoint
 - `--block-size`: Tamaño de bloque en tokens (default: 2000)
@@ -111,10 +111,10 @@ El sistema guarda automáticamente el progreso en `checkpoints/{pdf_name}_checkp
 - Buena calidad de voz
 - No requiere configuración adicional
 
-### pyttsx3
-- Offline y multiplataforma
-- Voz sintética básica
-- No requiere configuración adicional
+### Coqui XTTS
+- Clonación de voz multilingüe
+- Requiere GPU o CPU potente
+- Opcional: ruta a WAV de referencia para clonar voz
 
 ## Requisitos del Sistema
 
