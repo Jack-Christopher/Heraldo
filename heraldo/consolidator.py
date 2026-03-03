@@ -35,14 +35,14 @@ class TextConsolidator:
         r'^part\s+\d+',  # Part 1, 2, 3, etc.
     ]
     
-    def __init__(self, chapter_sentences: int = 50):
+    def __init__(self, chapter_words: int = 100):
         """
         Inicializa el consolidador de texto.
         
         Args:
-            chapter_sentences: Número de oraciones por capítulo si no se detectan capítulos
+            chapter_words: Número de palabras por bloque/capítulo
         """
-        self.chapter_sentences = chapter_sentences
+        self.chapter_words = chapter_words
     
     def consolidate_blocks(self, blocks: List[str]) -> str:
         """
@@ -128,27 +128,64 @@ class TextConsolidator:
             sentences = re.split(r'[.!?]+\s+', text)
             return [s.strip() for s in sentences if len(s.strip()) > 10]
     
+    def split_into_words(self, text: str) -> List[str]:
+        """
+        Divide el texto en palabras.
+        
+        Args:
+            text: Texto a dividir
+        
+        Returns:
+            Lista de palabras
+        """
+        # Dividir por espacios y filtrar palabras vacías
+        words = re.findall(r'\S+', text)
+        return [w for w in words if w.strip()]
+    
+    def split_text_by_words(self, text: str, words_per_chunk: int) -> List[str]:
+        """
+        Divide el texto en bloques de N palabras.
+        
+        Args:
+            text: Texto a dividir
+            words_per_chunk: Número de palabras por bloque
+        
+        Returns:
+            Lista de bloques de texto
+        """
+        words = self.split_into_words(text)
+        chunks = []
+        
+        for i in range(0, len(words), words_per_chunk):
+            chunk_words = words[i:i + words_per_chunk]
+            chunk_text = ' '.join(chunk_words)
+            if chunk_text.strip():
+                chunks.append(chunk_text)
+        
+        return chunks if chunks else [text]
+    
     def split_into_chapters(
         self, 
         text: str, 
         detected_chapters: Optional[List[Tuple[int, str]]] = None
     ) -> List[str]:
         """
-        Divide el texto en capítulos.
-        Si se detectan capítulos, usa esos puntos de división.
-        Si no, divide en bloques de N oraciones.
+        Divide el texto en bloques de N palabras.
+        Si se detectan capítulos, primero extrae cada capítulo y luego divide cada uno en bloques de palabras.
+        Si no, divide todo el texto en bloques de N palabras.
         
         Args:
             text: Texto consolidado a dividir
             detected_chapters: Lista de capítulos detectados (índice, título)
         
         Returns:
-            Lista de capítulos/bloques
+            Lista de bloques de texto (cada uno con aproximadamente chapter_words palabras)
         """
+        all_blocks = []
+        
         if detected_chapters and len(detected_chapters) > 0:
-            # Dividir por capítulos detectados
+            # Si hay capítulos detectados, extraer cada capítulo y dividirlo en bloques de palabras
             lines = text.split('\n')
-            chapters = []
             
             for i, (chapter_idx, chapter_title) in enumerate(detected_chapters):
                 start_idx = chapter_idx
@@ -156,20 +193,14 @@ class TextConsolidator:
                 
                 chapter_text = '\n'.join(lines[start_idx:end_idx]).strip()
                 if chapter_text:
-                    chapters.append(chapter_text)
-            
-            return chapters if chapters else [text]
+                    # Dividir este capítulo en bloques de palabras
+                    chapter_blocks = self.split_text_by_words(chapter_text, self.chapter_words)
+                    all_blocks.extend(chapter_blocks)
         else:
-            # Dividir en bloques de N oraciones
-            sentences = self.split_into_sentences(text)
-            chapters = []
-            
-            for i in range(0, len(sentences), self.chapter_sentences):
-                chapter = ' '.join(sentences[i:i + self.chapter_sentences])
-                if chapter.strip():
-                    chapters.append(chapter)
-            
-            return chapters if chapters else [text]
+            # No hay capítulos detectados, dividir todo el texto en bloques de palabras
+            all_blocks = self.split_text_by_words(text, self.chapter_words)
+        
+        return all_blocks if all_blocks else [text]
     
     def process(
         self, 
@@ -194,10 +225,11 @@ class TextConsolidator:
         
         if chapters_detected:
             print(f"Se detectaron {len(detected_chapters)} capítulos")
+            print(f"Dividiendo cada capítulo en bloques de {self.chapter_words} palabras...")
         else:
-            print(f"No se detectaron capítulos. Dividiendo en bloques de {self.chapter_sentences} oraciones...")
+            print(f"No se detectaron capítulos. Dividiendo en bloques de {self.chapter_words} palabras...")
         
         chapters = self.split_into_chapters(consolidated_text, detected_chapters)
-        print(f"Texto dividido en {len(chapters)} capítulos/bloques finales")
+        print(f"Texto dividido en {len(chapters)} bloques finales (cada uno con ~{self.chapter_words} palabras)")
         
         return chapters, chapters_detected

@@ -163,9 +163,12 @@ class PDFExtractor:
         
         return blocks
     
-    def process(self) -> List[str]:
+    def process(self, clean: bool = True) -> List[str]:
         """
-        Proceso completo: extrae, limpia y divide el texto en bloques.
+        Proceso completo: extrae, opcionalmente limpia y divide el texto en bloques.
+        
+        Args:
+            clean: Si True, limpia el texto. Si False, usa el texto crudo.
         
         Returns:
             Lista de bloques de texto listos para procesamiento
@@ -173,11 +176,25 @@ class PDFExtractor:
         print("Extrayendo texto del PDF...")
         raw_text = self.extract_text()
         
-        print("Limpiando texto...")
-        clean_text = self.clean_text(raw_text)
+        if clean:
+            print("Limpiando texto...")
+            processed_text = self.clean_text(raw_text)
+        else:
+            print("Usando texto crudo (sin limpieza)...")
+            processed_text = raw_text
         
         print(f"Dividiendo texto en bloques de ~{self.block_size} tokens...")
-        blocks = self.split_into_blocks(clean_text)
+        blocks = self.split_into_blocks(processed_text)
         
         print(f"Texto dividido en {len(blocks)} bloques")
         return blocks
+    
+    def extract_raw_text(self) -> str:
+        """
+        Extrae el texto crudo del PDF sin procesamiento adicional.
+        Útil para guardar el texto original.
+        
+        Returns:
+            Texto crudo del PDF
+        """
+        return self.extract_text()
