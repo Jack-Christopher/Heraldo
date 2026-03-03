@@ -1,0 +1,52 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: heraldo-mongodb
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: heraldo-api
+    ports:
+      - "5001:5001"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/heraldo
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - FLASK_ENV=production
+      - OUTPUTS_DIR=/app/outputs
+      - UPLOADS_DIR=/app/uploads
+      - TTS_ENGINE=${TTS_ENGINE:-gtts}
+    volumes:
+      - heraldo_outputs:/app/outputs
+      - heraldo_uploads:/app/uploads
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  react:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: heraldo-frontend
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+  heraldo_outputs:
+  heraldo_uploads:
