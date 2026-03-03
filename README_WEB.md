@@ -3,7 +3,7 @@
 ## Requisitos
 
 - Docker y Docker Compose
-- Para producción: JWT_SECRET en entorno
+- Para producción: JWT_SECRET y MONGO_ROOT_PASSWORD en entorno
 
 ## Puertos
 
@@ -11,14 +11,14 @@
 |-----------|--------|------------------------------------------|
 | Frontend  | 3001   | App React (nginx)                        |
 | API       | 5001   | Flask backend                            |
-| MongoDB   | 27018  | Base de datos (mapeo host)               |
+| MongoDB   | —      | No expuesto (solo red interna Docker)    |
 
 ## Despliegue con Docker
 
 ```bash
 # Crear .env desde plantilla
-cp .env.docker .env
-# Editar .env y poner JWT_SECRET seguro
+cp .env.example .env
+# Editar .env: JWT_SECRET, MONGO_ROOT_PASSWORD (autenticación MongoDB)
 
 # Levantar servicios
 docker compose up -d
@@ -38,11 +38,14 @@ Acceso: http://localhost:3001
 cd backend && pip install -r requirements.txt
 cd ..
 
-# MongoDB (Docker)
-docker run -d -p 27018:27017 --name heraldo-mongo mongo:7
+# MongoDB (Docker con auth)
+docker run -d -p 27018:27017 --name heraldo-mongo \
+  -e MONGO_INITDB_ROOT_USERNAME=heraldo_admin \
+  -e MONGO_INITDB_ROOT_PASSWORD=devpassword \
+  mongo:7
 
-# Variables
-export MONGODB_URI=mongodb://localhost:27018/heraldo
+# Variables (usar mismo usuario/contraseña que el contenedor)
+export MONGODB_URI=mongodb://heraldo_admin:devpassword@localhost:27018/heraldo?authSource=admin
 export JWT_SECRET=dev-secret
 export OUTPUTS_DIR=./outputs
 export UPLOADS_DIR=./uploads

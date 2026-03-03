@@ -105,6 +105,11 @@ check_env_vars() {
         exit 1
     fi
 
+    if [ -z "${MONGO_ROOT_PASSWORD:-}" ]; then
+        error "MONGO_ROOT_PASSWORD must be set (MongoDB authentication)"
+        exit 1
+    fi
+
     success "Environment variables validated"
 }
 

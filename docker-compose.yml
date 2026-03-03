@@ -2,12 +2,13 @@ services:
   mongodb:
     image: mongo:7
     container_name: heraldo-mongodb
-    ports:
-      - "27018:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USER:-heraldo_admin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD required}
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "sh", "-c", "mongosh 'mongodb://$${MONGO_INITDB_ROOT_USERNAME}:$${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/admin' --quiet --eval 'db.adminCommand(\"ping\").ok'"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,7 +22,7 @@ services:
     ports:
       - "5001:5001"
     environment:
-      - MONGODB_URI=mongodb://mongodb:27017/heraldo
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-heraldo_admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/heraldo?authSource=admin
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
       - FLASK_ENV=production
       - OUTPUTS_DIR=/app/outputs
