@@ -97,7 +97,7 @@ def require_admin(f):
             g.user_id = ObjectId(payload["sub"])
         except Exception:
             return jsonify({"error": "Invalid token"}), 401
-        from ..models import user_find_by_id
+        from .models import user_find_by_id
         user = user_find_by_id(g.user_id)
         if not user or user.get("role") != "admin":
             return jsonify({"error": "Admin access required"}), 403
