@@ -29,6 +29,8 @@ def user_create(full_name: str, password_hash: str, ip: str, email: str) -> dict
         "full_name": full_name,
         "password_hash": password_hash,
         "email": email,
+        "role": "user",
+        "limits": {},
         "created_at": datetime.utcnow(),
         "last_login": datetime.utcnow(),
         "last_ip": ip,
@@ -64,6 +66,65 @@ def user_find_by_email(email: str) -> Optional[dict]:
     return get_users_collection().find_one({"email": email})
 
 
+def user_find_by_id(user_id):
+    """Find user by ID."""
+    from bson import ObjectId
+    if isinstance(user_id, str):
+        user_id = ObjectId(user_id)
+    return get_users_collection().find_one({"_id": user_id})
+
+
+def user_find_all(limit: int = 100) -> list:
+    """List all users (for admin)."""
+    return list(
+        get_users_collection()
+        .find({}, {"password_hash": 0})
+        .sort("created_at", -1)
+        .limit(limit)
+    )
+
+
+def user_update_limits(
+    user_id,
+    max_pdfs_per_user: Optional[int] = None,
+    max_words_per_pdf: Optional[int] = None,
+    unset_max_pdfs: bool = False,
+    unset_max_words: bool = False,
+) -> None:
+    """Update per-user limits. Use unset_* to remove override (use global default)."""
+    from bson import ObjectId
+    if isinstance(user_id, str):
+        user_id = ObjectId(user_id)
+    set_updates = {}
+    unset_updates = {}
+    if unset_max_pdfs:
+        unset_updates["limits.max_pdfs_per_user"] = ""
+    elif max_pdfs_per_user is not None:
+        set_updates["limits.max_pdfs_per_user"] = max_pdfs_per_user
+    if unset_max_words:
+        unset_updates["limits.max_words_per_pdf"] = ""
+    elif max_words_per_pdf is not None:
+        set_updates["limits.max_words_per_pdf"] = max_words_per_pdf
+    op = {}
+    if set_updates:
+        op["$set"] = set_updates
+    if unset_updates:
+        op["$unset"] = unset_updates
+    if op:
+        get_users_collection().update_one({"_id": user_id}, op)
+
+
+def user_get_effective_limits(user_doc: Optional[dict], global_max_pdfs: int, global_max_words: int) -> tuple[int, int]:
+    """Return (max_pdfs, max_words) for a user. Uses per-user limits if set, else global."""
+    if not user_doc:
+        return global_max_pdfs, global_max_words
+    limits = user_doc.get("limits") or {}
+    max_pdfs = limits.get("max_pdfs_per_user")
+    max_words = limits.get("max_words_per_pdf")
+    return (
+        max_pdfs if max_pdfs is not None else global_max_pdfs,
+        max_words if max_words is not None else global_max_words,
+    )
 
 
 def user_update_login(user_id, ip: str):

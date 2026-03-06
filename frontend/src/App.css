@@ -778,6 +778,160 @@ h2 {
   font-weight: 500;
 }
 
+/* ===== Admin ===== */
+.admin-page h1,
+.admin-user-detail h1 {
+  margin-bottom: 1rem;
+}
+
+.admin-intro {
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
+}
+
+.admin-page table,
+.admin-documents table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.admin-page th,
+.admin-page td,
+.admin-documents th,
+.admin-documents td {
+  padding: 1rem 1.25rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-page th,
+.admin-documents th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.role-badge.admin {
+  background: rgba(233, 69, 96, 0.2);
+  color: var(--accent);
+}
+
+.role-badge.user {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+}
+
+.btn-sm {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.btn.back {
+  margin-bottom: 1.5rem;
+}
+
+.admin-user-detail .admin-user-email,
+.admin-user-detail .admin-user-role,
+.admin-user-detail .admin-user-stats {
+  margin: 0.5rem 0;
+  color: var(--text-secondary);
+}
+
+.admin-limits,
+.admin-documents {
+  margin-top: 2.5rem;
+}
+
+.admin-limits h2,
+.admin-documents h2 {
+  margin-bottom: 1rem;
+  font-size: 1.15rem;
+}
+
+.admin-limits-current {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+}
+
+.admin-limits-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: flex-end;
+  margin-top: 1rem;
+}
+
+.admin-limits-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.admin-limits-form input {
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: 1rem;
+  min-width: 140px;
+}
+
+.admin-documents .link-filename {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.admin-documents .link-filename:hover {
+  color: var(--accent-hover);
+}
+
+.admin-documents .status {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.admin-documents .status.completed {
+  background: rgba(45, 160, 70, 0.2);
+  color: #7dd99e;
+}
+
+.admin-documents .status.pending,
+.admin-documents .status.processing {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffd54f;
+}
+
+.admin-documents .status.failed {
+  background: var(--accent-muted);
+  color: #ff8a95;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 640px) {
   .layout {

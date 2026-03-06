@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import UploadPdf from './pages/UploadPdf';
 import MyPdfs from './pages/MyPdfs';
+import Admin from './pages/Admin';
 import './App.css';
 
 function App() {
@@ -23,6 +24,8 @@ function App() {
             <Route path="upload" element={<UploadPdf />} />
             <Route path="my-pdfs" element={<MyPdfs />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="admin/users/:userId" element={<Admin />} />
+            <Route path="admin" element={<Admin />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

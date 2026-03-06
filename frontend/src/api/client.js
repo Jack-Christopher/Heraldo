@@ -19,6 +19,13 @@ export async function fetchLimits() {
   return res.json();
 }
 
+/** Authenticated: returns effective limits for current user (per-user overrides). */
+export async function fetchUserLimits() {
+  const res = await fetch(`${API_BASE}/user/limits`, { headers: getHeaders() });
+  if (!res.ok) throw new Error('Failed to fetch limits');
+  return res.json();
+}
+
 export async function login(email, password) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
@@ -91,14 +98,26 @@ export async function fetchDocumentStatus(id) {
 export async function countPdfWords(file) {
   const formData = new FormData();
   formData.append('file', file);
-  const res = await fetch(`${API_BASE}/pdf/count-words`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${getToken()}` },
-    body: formData,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Error al contar palabras');
-  return data;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s
+  try {
+    const res = await fetch(`${API_BASE}/pdf/count-words`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}` },
+      body: formData,
+      signal: controller.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Error al contar palabras');
+    return data;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('El archivo tardó demasiado. Prueba con un PDF más pequeño o con menos páginas.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function uploadPdf(file) {
@@ -146,6 +165,58 @@ export async function getPdfViewToken(id) {
 /** URL to view the uploaded PDF in a new tab. Token valid 1h. */
 export function getPdfViewUrl(id, token) {
   return `/api/pdf/${id}/view?t=${encodeURIComponent(token)}`;
+}
+
+// --- Admin API ---
+export async function adminListUsers() {
+  const res = await fetch(`${API_BASE}/admin/users`, { headers: getHeaders() });
+  if (!res.ok) throw new Error('Failed to fetch users');
+  return res.json();
+}
+
+export async function adminGetUser(userId) {
+  const res = await fetch(`${API_BASE}/admin/users/${userId}`, { headers: getHeaders() });
+  if (!res.ok) throw new Error('Failed to fetch user');
+  return res.json();
+}
+
+export async function adminUpdateUserLimits(userId, payload) {
+  const res = await fetch(`${API_BASE}/admin/users/${userId}/limits`, {
+    method: 'PATCH',
+    headers: getHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to update limits');
+  }
+  return res.json();
+}
+
+export async function adminListUserDocuments(userId) {
+  const res = await fetch(`${API_BASE}/admin/users/${userId}/documents`, { headers: getHeaders() });
+  if (!res.ok) throw new Error('Failed to fetch documents');
+  return res.json();
+}
+
+export async function adminGetPlayToken(userId, docId) {
+  const res = await fetch(`${API_BASE}/admin/users/${userId}/documents/${docId}/play-token`, {
+    method: 'POST',
+    headers: getHeaders(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to get play token');
+  return data.token;
+}
+
+export async function adminGetPdfViewToken(userId, docId) {
+  const res = await fetch(`${API_BASE}/admin/users/${userId}/documents/${docId}/view-pdf-token`, {
+    method: 'POST',
+    headers: getHeaders(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to get view token');
+  return data.token;
 }
 
 export async function downloadAudio(id, filename) {

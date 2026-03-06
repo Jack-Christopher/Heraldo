@@ -16,6 +16,9 @@ export default function Layout() {
           <NavLink to="/upload">Subir PDF</NavLink>
           <NavLink to="/my-pdfs">Mis PDFs</NavLink>
           <NavLink to="/profile">Perfil</NavLink>
+          {user?.role === 'admin' && (
+            <NavLink to="/admin">Admin</NavLink>
+          )}
         </nav>
       </header>
       <main>

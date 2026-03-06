@@ -64,6 +64,14 @@ npm run dev
 
 Frontend en http://localhost:3001 (proxy a API en 5001)
 
+## Roles y administración
+
+Para tener un usuario administrador, configura `ADMIN_EMAILS` en `.env` (emails separados por coma). Al iniciar la API, la migración 005 promoverá esos usuarios a rol `admin`. Los admins pueden:
+
+- Ver y gestionar todos los usuarios
+- Editar límites por usuario (max PDFs, max palabras/PDF)
+- Ver los PDFs y audios de cualquier usuario
+
 ## TTS
 
 Por defecto usa **gTTS** (requiere internet). Para usar Piper en Docker, monta el binario y modelos y configura `TTS_ENGINE=piper`.

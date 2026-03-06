@@ -52,6 +52,7 @@ def register():
             "id": str(user["_id"]),
             "full_name": user["full_name"],
             "email": user.get("email"),
+            "role": user.get("role", "user"),
         },
     }), 201
 
@@ -96,6 +97,7 @@ def login():
             "id": str(user["_id"]),
             "full_name": user.get("full_name") or user.get("username", ""),
             "email": user.get("email"),
+            "role": user.get("role", "user"),
         },
     })
 
@@ -111,6 +113,7 @@ def me():
         "id": str(user["_id"]),
         "full_name": user.get("full_name") or user.get("username", ""),
         "email": user.get("email"),
+        "role": user.get("role", "user"),
         "last_login": user.get("last_login").isoformat() if user.get("last_login") else None,
         "last_ip": user.get("last_ip"),
     })

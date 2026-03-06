@@ -10,6 +10,8 @@ import jwt
 
 from ..auth import require_auth, get_current_user_id
 from ..models import (
+    user_find_by_id,
+    user_get_effective_limits,
     document_create,
     document_find_by_id,
     document_find_by_user,
@@ -49,20 +51,33 @@ def count_words():
     temp_path = os.path.join(user_uploads, f"_count_{uuid.uuid4()}.pdf")
     try:
         file.save(temp_path)
-        _, word_count = count_pdf_pages_and_words(temp_path)
+        _, word_count, is_estimated = count_pdf_pages_and_words(temp_path)
+    except MemoryError:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        return jsonify({"error": "El archivo es demasiado grande. Prueba con un PDF más pequeño."}), 400
     except Exception as e:
         if os.path.exists(temp_path):
             os.remove(temp_path)
-        return jsonify({"error": str(e)}), 400
+        err_msg = str(e) or "Error al procesar el PDF."
+        if "timeout" in err_msg.lower() or "signal" in err_msg.lower():
+            err_msg = "El archivo tardó demasiado. Prueba con un PDF más pequeño o menos páginas."
+        return jsonify({"error": err_msg}), 400
     finally:
         if os.path.exists(temp_path):
-            os.remove(temp_path)
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
 
-    max_words = current_app.config["MAX_WORDS_PER_PDF"]
+    user = user_find_by_id(user_id)
+    global_max = current_app.config["MAX_WORDS_PER_PDF"]
+    _, max_words = user_get_effective_limits(user, current_app.config["MAX_PDFS_PER_USER"], global_max)
     return jsonify({
         "word_count": word_count,
         "max_words": max_words,
         "within_limit": word_count <= max_words,
+        "estimated": is_estimated,
     })
 
 
@@ -70,8 +85,12 @@ def count_words():
 @require_auth
 def upload():
     user_id = get_current_user_id()
-    max_pdfs = current_app.config["MAX_PDFS_PER_USER"]
-    max_words = current_app.config["MAX_WORDS_PER_PDF"]
+    user = user_find_by_id(user_id)
+    max_pdfs, max_words = user_get_effective_limits(
+        user,
+        current_app.config["MAX_PDFS_PER_USER"],
+        current_app.config["MAX_WORDS_PER_PDF"],
+    )
 
     # Check total limit (max PDFs per user in account)
     total_count = document_count_total_by_user(user_id)
@@ -105,7 +124,7 @@ def upload():
     file.save(pdf_path)
 
     # Validate limits (word count only)
-    valid, err_msg, page_count, word_count = validate_pdf_limits(pdf_path, max_words)
+    valid, err_msg, page_count, word_count, _ = validate_pdf_limits(pdf_path, max_words)
     if not valid:
         os.remove(pdf_path)
         return jsonify({"error": err_msg, "page_count": page_count, "word_count": word_count}), 400

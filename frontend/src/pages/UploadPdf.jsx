@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { uploadPdf, fetchStats, fetchLimits, countPdfWords } from '../api/client';
+import { uploadPdf, fetchStats, fetchUserLimits, countPdfWords } from '../api/client';
 
 export default function UploadPdf() {
   const { user } = useAuth();
@@ -12,13 +12,14 @@ export default function UploadPdf() {
   const [countLoading, setCountLoading] = useState(false);
   const [wordCount, setWordCount] = useState(null);
   const [withinLimit, setWithinLimit] = useState(null);
+  const [estimated, setEstimated] = useState(false);
   const [error, setError] = useState('');
   const [limits, setLimits] = useState(null);
   const [quota, setQuota] = useState(null);
 
   useEffect(() => {
     function load() {
-      Promise.all([fetchLimits(), fetchStats()])
+      Promise.all([fetchUserLimits(), fetchStats()])
         .then(([l, s]) => {
           setLimits(l);
           const total = s.total_pdfs || 0;
@@ -44,13 +45,17 @@ export default function UploadPdf() {
     setCountLoading(true);
     setWordCount(null);
     setWithinLimit(null);
+    setEstimated(false);
+    setError('');
     try {
       const data = await countPdfWords(f);
       setWordCount(data.word_count);
       setWithinLimit(data.within_limit);
-    } catch {
+      setEstimated(data.estimated === true);
+    } catch (err) {
       setWordCount(null);
       setWithinLimit(null);
+      setError(err.message || 'Error al procesar el archivo. Prueba con un PDF más pequeño.');
     } finally {
       setCountLoading(false);
     }
@@ -160,12 +165,15 @@ export default function UploadPdf() {
               <p><strong>{file.name}</strong></p>
               <div className={`word-count-badge ${withinLimit === true ? 'within' : withinLimit === false ? 'over' : ''}`}>
                 {countLoading ? (
-                  <span>Contando palabras...</span>
+                  <span>Contando palabras (PDFs grandes: estimación rápida)...</span>
                 ) : wordCount != null ? (
                   <>
+                    {estimated && <span className="est-badge">~</span>}
                     <span className="word-count-number">{wordCount.toLocaleString()}</span>
                     <span> palabras</span>
-                    {withinLimit === true && <span className="limit-ok"> • Dentro del límite</span>}
+                    {estimated && <span className="limit-ok"> • estimado</span>}
+                    {withinLimit === true && !estimated && <span className="limit-ok"> • Dentro del límite</span>}
+                    {withinLimit === true && estimated && <span className="limit-ok"> • Dentro del límite aprox.</span>}
                     {withinLimit === false && <span className="limit-over"> • Excede el límite ({(limits?.max_words_per_pdf ?? 1500).toLocaleString()} máx.)</span>}
                   </>
                 ) : null}

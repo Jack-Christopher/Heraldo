@@ -11,6 +11,7 @@ bcrypt>=4.1.0
 pymongo>=4.6.0
 
 # Heraldo dependencies
+pypdf>=4.0.0
 pdfplumber>=0.10.0
 tiktoken>=0.5.0
 nltk>=3.8.0

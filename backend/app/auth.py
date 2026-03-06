@@ -78,6 +78,33 @@ def require_auth(f):
     return wrapped
 
 
+def require_admin(f):
+    """Decorator to require JWT auth and admin role."""
+    @functools.wraps(f)
+    def wrapped(*args, **kwargs):
+        from flask import current_app
+        token = get_token_from_request()
+        if not token:
+            return jsonify({"error": "Missing or invalid authorization"}), 401
+        payload = decode_token(
+            token,
+            current_app.config["JWT_SECRET_KEY"],
+            current_app.config.get("JWT_ALGORITHM", "HS256"),
+        )
+        if not payload or "sub" not in payload:
+            return jsonify({"error": "Invalid or expired token"}), 401
+        try:
+            g.user_id = ObjectId(payload["sub"])
+        except Exception:
+            return jsonify({"error": "Invalid token"}), 401
+        from ..models import user_find_by_id
+        user = user_find_by_id(g.user_id)
+        if not user or user.get("role") != "admin":
+            return jsonify({"error": "Admin access required"}), 403
+        return f(*args, **kwargs)
+    return wrapped
+
+
 def get_client_ip() -> str:
     """Get client IP from request (handles proxies)."""
     return request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",")[0].strip()

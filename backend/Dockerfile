@@ -25,4 +25,4 @@ ENV FLASK_APP=wsgi:app
 
 EXPOSE 5001
 
-CMD ["gunicorn", "-b", "0.0.0.0:5001", "-w", "2", "wsgi:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:5001", "-w", "2", "--timeout", "120", "wsgi:app"]
